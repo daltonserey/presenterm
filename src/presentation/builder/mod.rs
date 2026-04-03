@@ -595,7 +595,7 @@ impl<'a, 'b> PresentationBuilder<'a, 'b> {
             let ops: Vec<RenderOperation> = builder.iter_operations().cloned().collect();
             let footer: Vec<RenderOperation> = builder.iter_footer().cloned().collect();
 
-            let mut split_results = self.split_single_slide(ops, dimensions);
+            let split_results = self.split_single_slide(ops, dimensions);
 
             for chunk_ops in split_results {
                 let chunk = SlideChunk::new(chunk_ops, Vec::new());
