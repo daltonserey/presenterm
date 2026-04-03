@@ -256,6 +256,9 @@ pub struct OptionsConfig {
 
     /// Whether the first `h1` header on a slide should be considered a slide title.
     pub h1_slide_titles: Option<bool>,
+
+    /// Whether to automatically split overflowing slides into multiple slides.
+    pub auto_split_overflowing_slides: Option<bool>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize)]

@@ -307,6 +307,7 @@ impl CoreComponents {
             validate_snippets: config.snippet.validate,
             layout_grid: false,
             h1_slide_titles: options.h1_slide_titles.unwrap_or_default(),
+            auto_split_overflowing_slides: options.auto_split_overflowing_slides.unwrap_or_default(),
         }
     }
 

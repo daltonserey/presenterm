@@ -127,7 +127,7 @@ where
         Ok(())
     }
 
-    fn render_one(&mut self, operation: &RenderOperation) -> RenderResult {
+    pub(crate) fn render_one(&mut self, operation: &RenderOperation) -> RenderResult {
         match operation {
             RenderOperation::ClearScreen => self.clear_screen(),
             RenderOperation::ApplyMargin(properties) => self.apply_margin(properties),
@@ -155,6 +155,10 @@ where
         };
         self.max_modified_row = self.max_modified_row.max(self.terminal.cursor_row());
         Ok(())
+    }
+
+    pub(crate) fn max_row(&self) -> u16 {
+        self.max_modified_row
     }
 
     fn current_rect(&self) -> &WindowRect {

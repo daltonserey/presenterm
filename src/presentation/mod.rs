@@ -226,6 +226,14 @@ impl SlideBuilder {
     pub(crate) fn build(self) -> Slide {
         Slide::new(self.chunks, self.footer)
     }
+
+    pub(crate) fn iter_operations(&self) -> impl Iterator<Item = &RenderOperation> + Clone {
+        self.chunks.iter().flat_map(|chunk| chunk.iter_operations()).chain(self.footer.iter())
+    }
+
+    pub(crate) fn iter_footer(&self) -> impl Iterator<Item = &RenderOperation> + Clone {
+        self.footer.iter()
+    }
 }
 
 /// A slide.

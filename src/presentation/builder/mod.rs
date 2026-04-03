@@ -18,7 +18,7 @@ use crate::{
             sources::MarkdownSources,
         },
     },
-    render::operation::MarginProperties,
+    render::{operation::MarginProperties, properties::WindowSize, validate::OverflowValidator},
     resource::{ResourceBasePath, Resources},
     terminal::image::{
         Image,
@@ -97,6 +97,7 @@ pub struct PresentationBuilderOptions {
     pub validate_snippets: bool,
     pub layout_grid: bool,
     pub h1_slide_titles: bool,
+    pub auto_split_overflowing_slides: bool,
 }
 
 impl PresentationBuilderOptions {
@@ -108,6 +109,8 @@ impl PresentationBuilderOptions {
         self.strict_front_matter_parsing =
             options.strict_front_matter_parsing.unwrap_or(self.strict_front_matter_parsing);
         self.h1_slide_titles = options.h1_slide_titles.unwrap_or(self.h1_slide_titles);
+        self.auto_split_overflowing_slides =
+            options.auto_split_overflowing_slides.unwrap_or(self.auto_split_overflowing_slides);
         if let Some(prefix) = options.command_prefix {
             self.command_prefix = prefix;
         }
@@ -150,6 +153,7 @@ impl Default for PresentationBuilderOptions {
             validate_snippets: false,
             layout_grid: false,
             h1_slide_titles: false,
+            auto_split_overflowing_slides: false,
         }
     }
 }
@@ -264,6 +268,10 @@ impl<'a, 'b> PresentationBuilder<'a, 'b> {
         // Always have at least one empty slide
         if self.slide_builders.is_empty() {
             self.terminate_slide();
+        }
+
+        if self.options.auto_split_overflowing_slides {
+            self.split_overflowing_slides();
         }
 
         let mut bindings_modal_builder = KeyBindingsModalBuilder::default();
@@ -572,6 +580,75 @@ impl<'a, 'b> PresentationBuilder<'a, 'b> {
             RenderOperation::PopMargin,
             RenderOperation::RenderDynamic(Rc::new(generator)),
         ])
+    }
+
+    fn split_overflowing_slides(&mut self) {
+        let dimensions =
+            match WindowSize::current(self.options.theme_options.font_size_supported.then_some(16).unwrap_or(1)) {
+                Ok(d) => d,
+                Err(_) => return,
+            };
+
+        let mut new_builders = Vec::new();
+
+        for (idx, builder) in mem::take(&mut self.slide_builders).into_iter().enumerate() {
+            let ops: Vec<RenderOperation> = builder.iter_operations().cloned().collect();
+            let footer: Vec<RenderOperation> = builder.iter_footer().cloned().collect();
+
+            let mut split_results = self.split_single_slide(ops, dimensions);
+
+            for chunk_ops in split_results {
+                let chunk = SlideChunk::new(chunk_ops, Vec::new());
+                let mut slide_builder = SlideBuilder::default().chunks(vec![chunk]);
+                if !self.slides_without_footer.contains(&idx) {
+                    slide_builder = slide_builder.footer(footer.clone());
+                }
+                new_builders.push(slide_builder);
+            }
+        }
+
+        self.slide_builders = new_builders;
+        self.footer_vars.total_slides = self.slide_builders.len();
+    }
+
+    fn split_single_slide(&self, mut ops: Vec<RenderOperation>, dimensions: WindowSize) -> Vec<Vec<RenderOperation>> {
+        let mut results = Vec::new();
+
+        loop {
+            if let Some(split_idx) = OverflowValidator::find_split_point(&ops, dimensions) {
+                let logical_split = OverflowValidator::find_logical_split_point(&ops, split_idx);
+                let (first_ops, second_ops) = ops.split_at(logical_split);
+
+                results.push(first_ops.to_vec());
+
+                if second_ops.is_empty() {
+                    break;
+                }
+
+                let mut continuation = self.generate_slide_prelude();
+                continuation.extend(second_ops.iter().cloned());
+                ops = continuation;
+            } else {
+                results.push(ops);
+                break;
+            }
+        }
+
+        results
+    }
+
+    fn generate_slide_prelude(&self) -> Vec<RenderOperation> {
+        let style = self.theme.default_style.style;
+        let footer_height = self.theme.footer.height();
+        let mut ops = vec![RenderOperation::ClearScreen];
+        ops.push(RenderOperation::SetColors(style.colors));
+        ops.push(RenderOperation::ApplyMargin(MarginProperties {
+            horizontal: self.theme.default_style.margin,
+            top: 0,
+            bottom: footer_height,
+        }));
+        ops.push(RenderOperation::RenderLineBreak);
+        ops
     }
 
     fn slide_font_size(&self) -> u8 {
